@@ -76,7 +76,7 @@
   });
   kintone.events.on('app.record.index.show', (event) => {
     pendingContext = '';
-    mount(kintone.app.record.getHeaderMenuSpaceElement());
+    mount(kintone.app.getHeaderMenuSpaceElement());
     return event;
   });
   kintone.events.on('app.record.detail.show', (event) => {
