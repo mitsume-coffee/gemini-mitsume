@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三ツ目ちゃん（Gemini）</title>
+<style>
+  :root { --green:#0A5A0B; --yellow:#FFED00; --olive:#836312; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif; display:flex; flex-direction:column; height:100vh; background:#fff; }
+  header { background: var(--green); color:#fff; padding:10px 14px; font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; }
+  header .dot { width:10px; height:10px; border-radius:50%; background: var(--yellow); }
+  #log { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; background:#f7f7f2; }
+  .msg { max-width:85%; padding:8px 12px; border-radius:14px; font-size:14px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+  .msg.user { align-self:flex-end; background: var(--green); color:#fff; border-bottom-right-radius:4px; }
+  .msg.bot { align-self:flex-start; background:#fff; border:1px solid #ddd6bd; border-bottom-left-radius:4px; }
+  .msg.err { align-self:flex-start; background:#fdecec; border:1px solid #e5a3a3; }
+  #bar { display:flex; gap:8px; padding:10px; border-top:1px solid #e2e2d5; background:#fff; }
+  #input { flex:1; font-size:15px; padding:10px; border:1px solid #ccc; border-radius:10px; resize:none; height:44px; }
+  #send { background: var(--green); color:#fff; border:none; border-radius:10px; padding:0 18px; font-size:15px; font-weight:700; cursor:pointer; }
+  #send:disabled { opacity:.5; }
+</style>
+</head>
+<body>
+<header><span class="dot"></span>三ツ目ちゃん（Geminiエンジン）</header>
+<div id="log"></div>
+<div id="bar">
+  <textarea id="input" placeholder="メッセージを入力" rows="1"></textarea>
+  <button id="send">送信</button>
+</div>
+<script>
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbyus6yexg-jTFw_Zbqjs1PvRCfPKF2SNScffpV9Azl41GYDWoYBS9VFfRTz0UgmW1y8-Q/exec';
+  const logEl = document.getElementById('log');
+  const inputEl = document.getElementById('input');
+  const sendEl = document.getElementById('send');
+  const history = [];
+  function addMsg(text, cls) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + cls;
+    d.textContent = text;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+    return d;
+  }
+  function jsonp(url) {
+    return new Promise((resolve, reject) => {
+      const cb = 'cb_' + Math.random().toString(36).slice(2);
+      const s = document.createElement('script');
+      const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 60000);
+      function cleanup() { clearTimeout(timer); delete window[cb]; s.remove(); }
+      window[cb] = (data) => { cleanup(); resolve(data); };
+      s.onerror = () => { cleanup(); reject(new Error('network')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+      document.body.appendChild(s);
+    });
+  }
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    addMsg(text, 'user');
+    history.push({ role: 'user', text });
+    sendEl.disabled = true;
+    const wait = addMsg('考え中…', 'bot');
+    const token = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'chat', token, messages: history })
+      });
+      const deadline = Date.now() + 90000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1500));
+        const res = await jsonp(GAS_URL + '?api=chat&token=' + encodeURIComponent(token));
+        if (res && res.done) {
+          if (res.ok) {
+            wait.textContent = res.reply;
+            history.push({ role: 'assistant', text: res.reply });
+          } else {
+            wait.className = 'msg err';
+            wait.textContent = 'エラー: ' + (res.error || '不明');
+          }
+          sendEl.disabled = false;
+          return;
+        }
+      }
+      wait.className = 'msg err';
+      wait.textContent = 'タイムアウトしました。もう一度試してください。';
+    } catch (e) {
+      wait.className = 'msg err';
+      wait.textContent = '通信エラー: ' + e.message;
+    }
+    sendEl.disabled = false;
+  }
+  sendEl.addEventListener('click', send);
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  addMsg('こんにちは、三ツ目ちゃんやで。Geminiエンジンで動いてるわ。なんか聞いてな。', 'bot');
+</script>
+</body>
+</html>
