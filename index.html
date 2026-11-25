@@ -10,6 +10,10 @@
   body { margin:0; font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif; display:flex; flex-direction:column; height:100vh; background:#fff; }
   header { background: var(--green); color:#fff; padding:10px 14px; font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; }
   header .dot { width:10px; height:10px; border-radius:50%; background: var(--yellow); }
+  #ctx { display:none; background:#fffbe0; border-bottom:1px solid #e5d98a; padding:6px 12px; font-size:12px; color:#5c5312; align-items:center; gap:8px; }
+  #ctx.show { display:flex; }
+  #ctx span { flex:1; }
+  #ctx button { background:none; border:1px solid #c9bc6a; border-radius:6px; font-size:12px; padding:2px 8px; cursor:pointer; color:#5c5312; }
   #log { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; background:#f7f7f2; }
   .msg { max-width:85%; padding:8px 12px; border-radius:14px; font-size:14px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
   .msg.user { align-self:flex-end; background: var(--green); color:#fff; border-bottom-right-radius:4px; }
@@ -23,6 +27,7 @@
 </head>
 <body>
 <header><span class="dot"></span>三ツ目ちゃん（Geminiエンジン）</header>
+<div id="ctx"><span id="ctxText"></span><button id="ctxClear">外す</button></div>
 <div id="log"></div>
 <div id="bar">
   <textarea id="input" placeholder="メッセージを入力" rows="1"></textarea>
@@ -33,7 +38,26 @@
   const logEl = document.getElementById('log');
   const inputEl = document.getElementById('input');
   const sendEl = document.getElementById('send');
+  const ctxEl = document.getElementById('ctx');
+  const ctxTextEl = document.getElementById('ctxText');
   const history = [];
+  let pageContext = '';
+  function setContext(text) {
+    pageContext = text || '';
+    if (pageContext) {
+      ctxTextEl.textContent = '開いているレコードの情報を読み込んでいます（返事の参考にします）';
+      ctxEl.classList.add('show');
+    } else {
+      ctxEl.classList.remove('show');
+    }
+  }
+  document.getElementById('ctxClear').addEventListener('click', () => setContext(''));
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'mitsume-context') setContext(e.data.context || '');
+  });
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'mitsume-ready' }, '*');
+  }
   function addMsg(text, cls) {
     const d = document.createElement('div');
     d.className = 'msg ' + cls;
@@ -67,7 +91,7 @@
       await fetch(GAS_URL, {
         method: 'POST', mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'chat', token, messages: history })
+        body: JSON.stringify({ action: 'chat', token, messages: history, context: pageContext })
       });
       const deadline = Date.now() + 90000;
       while (Date.now() < deadline) {
@@ -97,7 +121,7 @@
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   });
-  addMsg('こんにちは、三ツ目ちゃんやで。Geminiエンジンで動いてるわ。なんか聞いてな。', 'bot');
+  addMsg('こんにちは、三ツ目ちゃんやで。Geminiエンジンで動いてるわ。レコードの詳細画面では、そのレコードの内容を踏まえて答えられるようになったで。', 'bot');
 </script>
 </body>
 </html>
