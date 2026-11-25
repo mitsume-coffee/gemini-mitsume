@@ -10,6 +10,8 @@
   body { margin:0; font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif; display:flex; flex-direction:column; height:100vh; background:#fff; }
   header { background: var(--green); color:#fff; padding:10px 14px; font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; }
   header .dot { width:10px; height:10px; border-radius:50%; background: var(--yellow); }
+  #who { display:none; background:#eef6ee; border-bottom:1px solid #cfe0cf; padding:5px 12px; font-size:12px; color:#2c4a2c; }
+  #who.show { display:block; }
   #ctx { display:none; background:#fffbe0; border-bottom:1px solid #e5d98a; padding:6px 12px; font-size:12px; color:#5c5312; align-items:center; gap:8px; }
   #ctx.show { display:flex; }
   #ctx span { flex:1; }
@@ -27,6 +29,7 @@
 </head>
 <body>
 <header><span class="dot"></span>三ツ目ちゃん（Geminiエンジン）</header>
+<div id="who"></div>
 <div id="ctx"><span id="ctxText"></span><button id="ctxClear">外す</button></div>
 <div id="log"></div>
 <div id="bar">
@@ -42,6 +45,8 @@
   const ctxTextEl = document.getElementById('ctxText');
   const history = [];
   let pageContext = '';
+  let currentUser = { code: '', name: '' };
+  let historyLoaded = false;
   function setContext(text) {
     pageContext = text || '';
     if (pageContext) {
@@ -53,8 +58,30 @@
   }
   document.getElementById('ctxClear').addEventListener('click', () => setContext(''));
   window.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'mitsume-context') setContext(e.data.context || '');
+    if (!e.data) return;
+    if (e.data.type === 'mitsume-context') setContext(e.data.context || '');
+    if (e.data.type === 'mitsume-user' && e.data.userCode) {
+      currentUser = { code: String(e.data.userCode), name: String(e.data.userName || '') };
+      const who = document.getElementById('who');
+      who.textContent = (currentUser.name || currentUser.code) + ' さんの会話として、台帳に記録しています';
+      who.classList.add('show');
+      loadHistory();
+    }
   });
+  async function loadHistory() {
+    if (historyLoaded || !currentUser.code) return;
+    historyLoaded = true;
+    try {
+      const res = await jsonp(GAS_URL + '?api=history&user=' + encodeURIComponent(currentUser.code));
+      if (res && res.ok && Array.isArray(res.messages) && res.messages.length) {
+        res.messages.forEach((m) => {
+          history.push({ role: m.role, text: m.text });
+          addMsg(m.text, m.role === 'assistant' ? 'bot' : 'user');
+        });
+        addMsg('前回の続きから表示してるで。', 'bot');
+      }
+    } catch (e) { }
+  }
   if (window.parent !== window) {
     window.parent.postMessage({ type: 'mitsume-ready' }, '*');
   }
@@ -91,7 +118,7 @@
       await fetch(GAS_URL, {
         method: 'POST', mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'chat', token, messages: history, context: pageContext })
+        body: JSON.stringify({ action: 'chat', token, messages: history, context: pageContext, userCode: currentUser.code, userName: currentUser.name })
       });
       const deadline = Date.now() + 90000;
       while (Date.now() < deadline) {
