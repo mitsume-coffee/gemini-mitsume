@@ -1,5 +1,5 @@
 /**
- * kintone カスタマイズ用（Phase 2）
+ * kintone カスタマイズ用（Phase 3：二層の記憶）
  */
 (() => {
   'use strict';
@@ -50,6 +50,12 @@
   function sendContext() {
     if (iframeEl && iframeEl.contentWindow) {
       iframeEl.contentWindow.postMessage({ type: 'mitsume-context', context: pendingContext }, IFRAME_ORIGIN);
+      try {
+        const u = kintone.getLoginUser();
+        if (u && u.code) {
+          iframeEl.contentWindow.postMessage({ type: 'mitsume-user', userCode: u.code, userName: u.name || '' }, IFRAME_ORIGIN);
+        }
+      } catch (err) { }
     }
   }
   function mount(spaceElement) {
